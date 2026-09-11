@@ -1,0 +1,54 @@
+{
+  "transport": {
+    "type": "serial",
+    "serial": {
+      "port": "/dev/ttyUSB0",
+      "baudrate": 115200,
+      "timeout": 1.0
+    },
+    "udp": {
+      "host": "0.0.0.0",
+      "port": 8888,
+      "buffer_size": 1024
+    }
+  },
+  "radar": {
+    "max_distance_mm": 6000,
+    "fov_degrees": 120,
+    "max_targets": 3
+  },
+  "zones": [
+    {
+      "name": "Desk Area",
+      "x_min": -1000,
+      "x_max": 800,
+      "y_min": 600,
+      "y_max": 2200,
+      "color": "#3498db",
+      "alert_level": "info"
+    },
+    {
+      "name": "Doorway Entrance",
+      "x_min": 1000,
+      "x_max": 2500,
+      "y_min": 2500,
+      "y_max": 4500,
+      "color": "#e74c3c",
+      "alert_level": "warning"
+    },
+    {
+      "name": "Rest / Lounge Area",
+      "x_min": -2500,
+      "x_max": -1200,
+      "y_min": 1500,
+      "y_max": 3800,
+      "color": "#2ecc71",
+      "alert_level": "normal"
+    }
+  ],
+  "visualization": {
+    "refresh_rate_hz": 10,
+    "trail_length": 8,
+    "cli_update_interval_s": 0.1
+  }
+}
