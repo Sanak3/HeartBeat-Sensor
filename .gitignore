@@ -110,3 +110,4 @@ Thumbs.db
 *.env
 *.env.local
 config/settings.local.json
+.idea
