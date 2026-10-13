@@ -58,15 +58,56 @@ void setupNetwork() {
 }
 
 /**
+ * @brief Decodes 16-bit sign-magnitude integer from HLK-LD2450.
+ * Bit 15 is sign (1 = negative, 0 = positive), bits 0-14 are magnitude.
+ */
+int16_t decodeSignMagnitude(uint16_t val) {
+    int16_t mag = val & 0x7FFF;
+    return (val & 0x8000) ? -mag : mag;
+}
+
+/**
  * @brief Forward frame to host via USB Serial and/or UDP.
  * 
  * @param buffer Pointer to the 30-byte verified radar frame.
  * @param length Length of the frame (LD2450_FRAME_LEN).
  */
 void forwardFrame(const uint8_t* buffer, size_t length) {
-    // 1. Forward via USB Serial
+#if DEBUG_SERIAL_READABLE
+    // Modo Legível para Serial Monitor da IDE do Arduino
+    Serial.printf("\n--- Frame #%lu ---\n", packetCount + 1);
+    Serial.print("HEX: ");
+    for (size_t i = 0; i < length; i++) {
+        if (buffer[i] < 0x10) Serial.print("0");
+        Serial.print(buffer[i], HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
+
+    // Decodifica até 3 alvos (cada alvo tem 8 bytes, a partir do byte 4)
+    for (int t = 0; t < LD2450_MAX_TARGETS; t++) {
+        int offset = 4 + (t * 8);
+        uint16_t raw_x = buffer[offset] | (buffer[offset + 1] << 8);
+        uint16_t raw_y = buffer[offset + 2] | (buffer[offset + 3] << 8);
+        uint16_t raw_spd = buffer[offset + 4] | (buffer[offset + 5] << 8);
+        uint16_t dist_res = buffer[offset + 6] | (buffer[offset + 7] << 8);
+
+        int16_t x = decodeSignMagnitude(raw_x);
+        int16_t y = decodeSignMagnitude(raw_y);
+        int16_t spd = decodeSignMagnitude(raw_spd);
+
+        if (x != 0 || y != 0 || spd != 0) {
+            Serial.printf("  [Alvo %d] X: %5d mm | Y: %5d mm | Vel: %3d cm/s | Res: %d mm\n",
+                          t + 1, x, y, spd, dist_res);
+        } else {
+            Serial.printf("  [Alvo %d] Sem deteccao\n", t + 1);
+        }
+    }
+#else
+    // 1. Forward via USB Serial (Modo binário bruto para o script Python)
     Serial.write(buffer, length);
     Serial.flush();
+#endif
 
     // 2. Forward via UDP if enabled and connected
 #if ENABLE_WIFI_UDP
@@ -90,11 +131,13 @@ void setup() {
     Serial.begin(HOST_SERIAL_BAUDRATE);
     delay(500);
 
+#if DEBUG_SERIAL_READABLE
     Serial.println("\n==================================================");
     Serial.println("ESP32 HLK-LD2450 Radar Gateway Initializing");
     Serial.println("==================================================");
     Serial.printf("[RADAR] Opening UART2 on RX: GPIO %d, TX: GPIO %d @ %d bps\n",
                   RADAR_RX_PIN, RADAR_TX_PIN, RADAR_BAUDRATE);
+#endif
 
     // Initialize Radar Serial (UART2)
     SerialRadar.begin(RADAR_BAUDRATE, SERIAL_8N1, RADAR_RX_PIN, RADAR_TX_PIN);
@@ -102,7 +145,9 @@ void setup() {
     // Optional WiFi setup
     setupNetwork();
 
+#if DEBUG_SERIAL_READABLE
     Serial.println("[SYSTEM] Ready. Streaming radar frames...\n");
+#endif
 }
 
 void loop() {

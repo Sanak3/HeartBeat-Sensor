@@ -44,6 +44,13 @@
 #define LD2450_MAX_TARGETS    3
 
 // ============================================================================
+// Monitor / Output Mode
+// ============================================================================
+// false: Envia bytes binários brutos (Serial.write) -> Modo para o script Python (main.py)
+// true:  Imprime texto e hexadecimais legíveis -> Para ver no Serial Monitor da IDE do Arduino
+#define DEBUG_SERIAL_READABLE false
+
+// ============================================================================
 // Network / UDP Configuration (Optional Mode)
 // ============================================================================
 // Set to true to broadcast/stream radar frames over WiFi UDP to host PC

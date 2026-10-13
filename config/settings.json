@@ -2,7 +2,7 @@
   "transport": {
     "type": "serial",
     "serial": {
-      "port": "/dev/ttyUSB0",
+      "port": "/dev/cu.usbserial-0001",
       "baudrate": 115200,
       "timeout": 1.0
     },

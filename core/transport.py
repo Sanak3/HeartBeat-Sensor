@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import abc
 import logging
+import os
 import socket
 from typing import Any, Dict, Optional
 
@@ -63,17 +64,67 @@ class SerialTransport(Transport):
 
         try:
             import serial  # Lazy import pyserial
+            import serial.tools.list_ports
         except ImportError:
             raise ImportError(
                 "pyserial package is required for SerialTransport. Install with: pip install pyserial"
             )
 
+        # Auto-detect or validate port existence if not found or set to 'auto'
+        target_port = self.port
+        available_ports = list(serial.tools.list_ports.comports())
+
+        def is_usb_serial(p: Any) -> bool:
+            dev = p.device.lower()
+            desc = (p.description or "").lower()
+            if any(ign in dev or ign in desc for ign in ("bluetooth", "buds", "debug-console", "airpods")):
+                return False
+            return any(x in dev for x in ("usbserial", "wchusbserial", "slab", "ttyusb", "ttyacm", "cu.usb")) or any(
+                x in desc for x in ("usb", "uart", "cp210", "ch340", "ftdi", "espressif", "serial")
+            )
+
+        usb_candidates = [p.device for p in available_ports if is_usb_serial(p)]
+
+        if target_port == "auto" or (not os.path.exists(target_port) and not any(target_port == p.device for p in available_ports)):
+            if usb_candidates:
+                target_port = usb_candidates[0]
+                logger.info("Auto-detected USB Serial Port: %s (substituting '%s')", target_port, self.port)
+                self.port = target_port
+            else:
+                detected_desc = [f"{p.device} ({p.description})" for p in available_ports if not any(x in p.device for x in ("Bluetooth", "debug-console"))]
+                ports_str = ", ".join(detected_desc) if detected_desc else "nenhuma porta USB detectada"
+                raise RuntimeError(
+                    f"\n[ERRO DE CONEXÃO USB]\n"
+                    f"A porta '{self.port}' não foi encontrada e nenhum ESP32 foi detectado via USB.\n"
+                    f"Portas encontradas: [{ports_str}].\n"
+                    f"-> Verifique se o cabo USB do ESP32 está conectado ao computador (e se é um cabo de dados, não só de carga)."
+                )
+
         logger.info("Opening serial port %s @ %d bps", self.port, self.baudrate)
-        self._serial = serial.Serial(
-            port=self.port,
-            baudrate=self.baudrate,
-            timeout=self.timeout,
-        )
+        try:
+            self._serial = serial.Serial(
+                port=self.port,
+                baudrate=self.baudrate,
+                timeout=self.timeout,
+            )
+        except serial.SerialException as exc:
+            msg = str(exc)
+            if "busy" in msg.lower() or "resource busy" in msg.lower() or "16" in msg:
+                raise RuntimeError(
+                    f"\n[ERRO DE PORTA OCUPADA]\n"
+                    f"A porta serial '{self.port}' está ocupada por outro programa.\n"
+                    f"-> Se a IDE do Arduino estiver aberta com o Serial Monitor ativo, FECHE o Serial Monitor!\n"
+                    f"-> Duas aplicações não podem usar a mesma porta USB ao mesmo tempo."
+                ) from exc
+            elif "not found" in msg.lower() or "no such file" in msg.lower() or "2" in msg:
+                ports_str = ", ".join(available_devs) if available_devs else "nenhuma detectada"
+                raise RuntimeError(
+                    f"\n[ERRO DE PORTA NÃO ENCONTRADA]\n"
+                    f"Não foi possível abrir a porta '{self.port}'.\n"
+                    f"Portas disponíveis no seu computador: [{ports_str}].\n"
+                    f"-> Conecte o ESP32 via USB ou atualize a porta em config/settings.json."
+                ) from exc
+            raise
 
     def close(self) -> None:
         if self._serial and self._serial.is_open:
